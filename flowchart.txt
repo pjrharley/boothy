@@ -1,0 +1,48 @@
+@startuml
+  start
+   :Press the button to start;
+   :Camera on (enter focus loop);
+   :'Press again when you're ready';
+   :The first photo will be taken in 5... (enter focus loop);
+   while (Take photo)
+      :The next photo will be taken in 5... (enter focus loop);
+   endwhile
+   :Create combined image;
+   :Start printing;
+   :Display for 10s;
+   end
+
+@enduml
+
+
+
+[button pressed]  "
+
+
+
+Focus loop
+
+Countdown
+Take first
+Countdown etc.
+
+Make montage
+
+Display for X
+
+Print
+
+
+
+qq. allow any interaction?
+
+
+
+if "Some Test" then
+-->[true] "Some Activity"
+--> "Another activity"
+-right-> (*)
+else
+->[false] "Something something"
+-->[Ending process] (*)
+endif
