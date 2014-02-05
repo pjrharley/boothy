@@ -5,8 +5,8 @@ import os, sys
 import time, datetime
 import StringIO
 
-COUNT_DOWN_TIME = 2
-MONTAGE_DISPLAY_TIME = 4
+COUNT_DOWN_TIME = 1
+MONTAGE_DISPLAY_TIME = 2
 
 class Camera(object):
     def __init__(self):
@@ -16,24 +16,26 @@ class Camera(object):
     def capture_preview(self):
         return StringIO.StringIO(self.camera.capture_preview().get_data())
     
-    def capture_image(self, image_name):
-        self.camera.capture_image(image_name)
+    def capture_image(self, image_path):
+        self.camera.capture_image(image_path)
 
 class DebugCamera():
     def capture_preview(self):
         with open('preview.jpg', 'rb') as img:
             return StringIO.StringIO(img.read())
     
-    def capture_image(self, image_name):
-        print "Captured an image!", image_name
+    def capture_image(self, image_path):
+        print "Captured an image!", image_path
 
 class PhotoBooth(object):
-    def __init__(self, fullscreen=False, debug=True):
+    def __init__(self, image_dest, fullscreen=False, debug=True):
         self.debug = debug
         if debug:
             self.camera = DebugCamera()
         else:
             self.camera = Camera()
+            
+        self.output_dir = image_dest
         self.size = None
         self.fullscreen = fullscreen
         self.events = []
@@ -50,6 +52,7 @@ class PhotoBooth(object):
     def start(self):
         preview = self.capture_preview()
         pygame.init()
+        self.clock = pygame.time.Clock()
         
         if self.fullscreen:
             pygame.display.set_mode((0,0), pygame.FULLSCREEN)
@@ -64,6 +67,8 @@ class PhotoBooth(object):
             pass
         
     def main_loop(self):
+        pygame.event.clear()
+        self.clock.tick(25)
         if len(self.events) > 10:
             self.events = self.events[:10]
         pygame.display.flip()
@@ -71,7 +76,8 @@ class PhotoBooth(object):
         button_press = self.space_pressed()
         
         if self.current_session:
-            self.current_session.do_frame(button_press)
+            if self.current_session.do_frame(button_press):
+                self.current_session = None
         elif button_press:
             self.current_session = PhotoSession(self)
         else:
@@ -80,6 +86,7 @@ class PhotoBooth(object):
         return self.check_for_quit_event()
 
     def wait(self):
+        self.main_surface.fill((0,0,0))
         self.render_text_centred('Waiting for button press')
 
     def render_text_centred(self, text_string):
@@ -92,14 +99,32 @@ class PhotoBooth(object):
         textpos.centery = location.centery
         self.main_surface.blit(text, textpos)
 
+    def capture_image(self, file_name):
+        self.camera.capture_image(os.path.join(self.output_dir, file_name))
+
     def load_image(self, image_name):
         if self.debug:
-            image_name = "test.jpg"
-        return pygame.image.load(image_name)
+            image_path = "test.jpg"
+        else:
+            image_path = os.path.join(self.output_dir, file_name)
+        return pygame.image.load(image_path)
 
+    def save(self, out_name, images):
+        first = self.load_image(images[0])
+        size = (first.get_size()[0]/2, first.get_size()[1]/2)
+        print size
+        combined = pygame.Surface(first.get_size())
+        for count, image_name in enumerate(images):
+            image = self.load_image(image_name)
+            image = pygame.transform.scale(image, size)
+            x_pos = size[0] * (count % 2)
+            y_pos = size[1] * (1 if count > 1 else 0)
+            print x_pos, y_pos
+            combined.blit(image, (x_pos, y_pos))
+        pygame.image.save(combined, os.path.join(self.output_dir, out_name))
+        
     def check_key_event(self, *keys):
         self.events += pygame.event.get(pygame.KEYUP)
-        pygame.event.clear()
         for event in self.events:
             if event.dict['key'] in keys:
                 self.events = []
@@ -123,6 +148,8 @@ class PhotoSession(object):
         self.capture_start = None
         self.montage_timer = -1
         self.montage_displayed = False
+        self.finished = False
+        self.saved_image = False
 
     def do_frame(self, button_pressed):
         if self.montage_timer > 0:
@@ -137,13 +164,15 @@ class PhotoSession(object):
         if button_pressed and not self.capture_start:
             self.timer = time.time() + COUNT_DOWN_TIME + 1
             self.capture_start = datetime.datetime.now()
+            
+        return self.finished
         
     def do_countdown(self):
         time_remaining = int(self.timer - time.time())
         
         if time_remaining <= 0:
             image_name = self.get_image_name(self.photo_count)
-            self.booth.camera.capture_image(image_name)
+            self.booth.capture_image(image_name)
             if self.photo_count == 4:
                 self.timer = -1
                 self.photo_count = 1
@@ -164,15 +193,20 @@ class PhotoSession(object):
                 y_pos = size[1] * (1 if im > 2 else 0)
                 self.booth.main_surface.blit(image, (x_pos, y_pos))
             self.montage_displayed = True
+        elif not self.saved_image:
+            self.booth.save(self.get_image_name('combined'), [self.get_image_name(im) for im in range(1,5)])
+            self.saved_image = True
+            
         if time.time() - self.montage_timer > MONTAGE_DISPLAY_TIME:
             self.montage_timer = -1
             self.montage_displayed = False
+            self.finished = True
     
     def get_image_name(self, count):
         return self.capture_start.strftime('%Y-%m-%d-%H%M%S') + '-' + str(count) + '.jpg'
 
 def main():
-    booth = PhotoBooth(fullscreen=False, debug=True)
+    booth = PhotoBooth('', fullscreen=False, debug=True)
     booth.start()
 
 if __name__ == '__main__':
