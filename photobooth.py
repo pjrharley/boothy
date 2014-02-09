@@ -8,6 +8,7 @@ from subprocess import call
 
 COUNT_DOWN_TIME = 1
 MONTAGE_DISPLAY_TIME = 2
+IDLE_TIME = 10
 
 class Camera(object):
     def __init__(self):
@@ -35,9 +36,9 @@ class PhotoBooth(object):
             self.camera = DebugCamera()
         else:
             self.camera = Camera()
-            
+        
         self.printing = printing
-            
+        
         self.output_dir = image_dest
         self.size = None
         self.fullscreen = fullscreen
@@ -63,7 +64,7 @@ class PhotoBooth(object):
             pygame.display.set_mode(preview.get_size())
 
         self.main_surface = pygame.display.get_surface()
-    
+
         self.size = self.main_surface.get_size()
 
         while self.main_loop():
@@ -80,17 +81,24 @@ class PhotoBooth(object):
         
         if self.current_session:
             if self.current_session.do_frame(button_press):
+                # Start a new session
+                self.current_session = PhotoSession(self)
+            if self.current_session.idle():
                 self.current_session = None
         elif button_press:
+            # Start a new session
             self.current_session = PhotoSession(self)
         else:
             self.wait()
-                
+        
         return self.check_for_quit_event()
+
+    def idle_timeout(self):
+        return False
 
     def wait(self):
         self.main_surface.fill((0,0,0))
-        self.render_text_centred('Waiting for button press')
+        self.render_text_centred('Press the button to start!')
 
     def render_text_centred(self, text_string):
         location = self.main_surface.get_rect()
@@ -157,6 +165,7 @@ class PhotoSession(object):
         self.montage_displayed = False
         self.finished = False
         self.saved_image = False
+        self.session_start = time.time()
 
     def do_frame(self, button_pressed):
         if self.montage_timer > 0:
@@ -164,6 +173,8 @@ class PhotoSession(object):
         else:
             picture = self.booth.capture_preview()
             self.booth.main_surface.blit(picture, (0, 0))
+            if not self.capture_start:
+                self.booth.render_text_centred("Push when ready!")
         
         if self.timer > 0:
             self.do_countdown()
@@ -173,7 +184,10 @@ class PhotoSession(object):
             self.capture_start = datetime.datetime.now()
             
         return self.finished
-        
+    
+    def idle(self):
+        return not self.capture_start and time.time() - self.session_start > IDLE_TIME
+    
     def do_countdown(self):
         time_remaining = int(self.timer - time.time())
         
@@ -213,23 +227,11 @@ class PhotoSession(object):
         return self.capture_start.strftime('%Y-%m-%d-%H%M%S') + '-' + str(count) + '.jpg'
 
 def main():
-    booth = PhotoBooth('', fullscreen=False, debug=True, printing=False)
+    booth = PhotoBooth('', fullscreen=True, debug=True, printing=False)
     booth.start()
 
 if __name__ == '__main__':
     main()
-
-
-
-#### Plan
-#
-#
-#
-#
-#
-#
-#
-#
 
 
 
