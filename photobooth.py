@@ -4,6 +4,7 @@ import piggyphoto, pygame
 import os, sys
 import time, datetime
 import StringIO
+from subprocess import call
 
 COUNT_DOWN_TIME = 1
 MONTAGE_DISPLAY_TIME = 2
@@ -28,12 +29,14 @@ class DebugCamera():
         print "Captured an image!", image_path
 
 class PhotoBooth(object):
-    def __init__(self, image_dest, fullscreen=False, debug=True):
+    def __init__(self, image_dest, fullscreen, debug, printing):
         self.debug = debug
         if debug:
             self.camera = DebugCamera()
         else:
             self.camera = Camera()
+            
+        self.printing = printing
             
         self.output_dir = image_dest
         self.size = None
@@ -110,6 +113,7 @@ class PhotoBooth(object):
         return pygame.image.load(image_path)
 
     def save(self, out_name, images):
+        out_path = os.path.join(self.output_dir, out_name)
         first = self.load_image(images[0])
         size = (first.get_size()[0]/2, first.get_size()[1]/2)
         print size
@@ -121,7 +125,10 @@ class PhotoBooth(object):
             y_pos = size[1] * (1 if count > 1 else 0)
             print x_pos, y_pos
             combined.blit(image, (x_pos, y_pos))
-        pygame.image.save(combined, os.path.join(self.output_dir, out_name))
+        pygame.image.save(combined, out_path)
+        
+        if self.printing:
+            call(["lpr", out_path])
         
     def check_key_event(self, *keys):
         self.events += pygame.event.get(pygame.KEYUP)
@@ -206,7 +213,7 @@ class PhotoSession(object):
         return self.capture_start.strftime('%Y-%m-%d-%H%M%S') + '-' + str(count) + '.jpg'
 
 def main():
-    booth = PhotoBooth('', fullscreen=False, debug=True)
+    booth = PhotoBooth('', fullscreen=False, debug=True, printing=False)
     booth.start()
 
 if __name__ == '__main__':
@@ -216,10 +223,6 @@ if __name__ == '__main__':
 
 #### Plan
 #
-# 1. Start previewing
-# 2. On interupt:
-#  a. Start timer countdown
-#  b. 
 #
 #
 #
