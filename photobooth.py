@@ -5,6 +5,7 @@ import os, sys
 import time, datetime
 import StringIO
 from subprocess import call
+import argparse
 
 COUNT_DOWN_TIME = 1
 MONTAGE_DISPLAY_TIME = 2
@@ -226,12 +227,20 @@ class PhotoSession(object):
     def get_image_name(self, count):
         return self.capture_start.strftime('%Y-%m-%d-%H%M%S') + '-' + str(count) + '.jpg'
 
-def main():
-    booth = PhotoBooth('', fullscreen=True, debug=True, printing=False)
-    booth.start()
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("save_to", help="Location to save images")
+    parser.add_argument("-d", "--debug", help="Don't require a real camera to be attached", action="store_true")
+    parser.add_argument("--nofullscreen", help="Don't use fullscreen mode", action="store_true")
+    parser.add_argument("--printing", help="Enable printing", action="store_true")
+    args = parser.parse_args()
 
+    booth = PhotoBooth(args.save_to, fullscreen=(not args.nofullscreen), debug=args.debug, printing=args.printing)
+    booth.start()
 
+# TODO
+# Investigate leave locked
+# Reinit the camera, or exit it when on black screen
+# Focusing?
 
