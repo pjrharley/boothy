@@ -17,10 +17,18 @@ class Camera(object):
         #qq self.camera.leave_locked()
     
     def capture_preview(self):
+        if not self.camera:
+            self.camera = piggyphoto.camera()
         return StringIO.StringIO(self.camera.capture_preview().get_data())
     
     def capture_image(self, image_path):
+        del self.camera
+        self.camera = piggyphoto.camera()
         self.camera.capture_image(image_path)
+        
+    def sleep(self):
+        del self.camera
+        self.camera = None
 
 class DebugCamera():
     def capture_preview(self):
@@ -29,6 +37,9 @@ class DebugCamera():
     
     def capture_image(self, image_path):
         print "Captured an image!", image_path
+        
+    def sleep(self):
+        print "Sleep!"
 
 class PhotoBooth(object):
     def __init__(self, image_dest, fullscreen, debug, printing):
@@ -86,6 +97,7 @@ class PhotoBooth(object):
                 self.current_session = PhotoSession(self)
             if self.current_session.idle():
                 self.current_session = None
+                self.camera.sleep()
         elif button_press:
             # Start a new session
             self.current_session = PhotoSession(self)
