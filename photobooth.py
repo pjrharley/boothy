@@ -114,7 +114,7 @@ class PhotoBooth(object):
     def capture_image(self, file_name):
         self.camera.capture_image(os.path.join(self.output_dir, file_name))
 
-    def load_image(self, image_name):
+    def load_image(self, file_name):
         if self.debug:
             image_path = "test.jpg"
         else:
@@ -132,7 +132,6 @@ class PhotoBooth(object):
             image = pygame.transform.scale(image, size)
             x_pos = size[0] * (count % 2)
             y_pos = size[1] * (1 if count > 1 else 0)
-            print x_pos, y_pos
             combined.blit(image, (x_pos, y_pos))
         pygame.image.save(combined, out_path)
         
