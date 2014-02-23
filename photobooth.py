@@ -87,6 +87,7 @@ class PhotoBooth(object):
         picture = pygame.image.load(preview)
         if self.size:
             picture = pygame.transform.scale(picture, self.size)
+        picture = pygame.transform.flip(picture, True, False)
         return picture
 
     def start(self):
