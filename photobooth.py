@@ -10,21 +10,45 @@ import argparse
 COUNT_DOWN_TIME = 1
 MONTAGE_DISPLAY_TIME = 2
 IDLE_TIME = 10
+CAPTURE_SHUTTER_SPEED = '1/200'
+DEFAULT_PREVIEW_SHUTTER_SPEED = '1'
+
+CAPTURE_APERTURE = '8'
+DEFAULT_PREVIEW_APERTURE = '1.8'
+
+TTY = '/dev/ttyUSB0'
 
 class Camera(object):
     def __init__(self):
         self.camera = piggyphoto.camera()
+        self.reset_settings()
+        #self.camera.config.main.actions.autofocusdrive=True
+        #self.camera.config.main.actions.manualfocusdrive=2
         #qq self.camera.leave_locked()
-    
+
+    def reset_settings(self):
+        pass
+        #self.camera.config.main.capturesettings.shutterspeed.value = DEFAULT_PREVIEW_SHUTTER_SPEED
+        #self.camera.config.main.capturesettings.aperture.value = DEFAULT_PREVIEW_APERTURE
+
+    def set_settings_for_capture(self):
+        pass
+        #self.camera.config.main.capturesettings.shutterspeed.value = CAPTURE_SHUTTER_SPEED
+        #self.camera.config.main.capturesettings.aperture.value = CAPTURE_APERTURE
+
     def capture_preview(self):
         if not self.camera:
             self.camera = piggyphoto.camera()
+            print "needed new camera"
         return StringIO.StringIO(self.camera.capture_preview().get_data())
     
     def capture_image(self, image_path):
         del self.camera
         self.camera = piggyphoto.camera()
+        
+        self.set_settings_for_capture()
         self.camera.capture_image(image_path)
+        self.reset_settings()
         
     def sleep(self):
         del self.camera
