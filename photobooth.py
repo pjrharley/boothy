@@ -66,13 +66,16 @@ class PhotoBooth(object):
         return picture
 
     def start(self):
-        preview = self.capture_preview()
         pygame.init()
         self.clock = pygame.time.Clock()
+        
+        self.add_button_listener()
         
         if self.fullscreen:
             pygame.display.set_mode((0,0), pygame.FULLSCREEN)
         else:
+            raise Exception("I've broken non fullscreen for now")
+            preview = self.capture_preview()
             pygame.display.set_mode(preview.get_size())
 
         self.main_surface = pygame.display.get_surface()
@@ -81,6 +84,7 @@ class PhotoBooth(object):
 
         while self.main_loop():
             pass
+        self.camera.sleep()
         
     def main_loop(self):
         pygame.event.clear()
@@ -89,7 +93,7 @@ class PhotoBooth(object):
             self.events = self.events[:10]
         pygame.display.flip()
          
-        button_press = self.space_pressed()
+        button_press = self.space_pressed() or self.button.is_pressed()
         
         if self.current_session:
             if self.current_session.do_frame(button_press):
@@ -149,7 +153,10 @@ class PhotoBooth(object):
         
         if self.printing:
             call(["lpr", out_path])
-        
+
+    def add_button_listener(self):
+        self.button = Button(TTY)
+
     def check_key_event(self, *keys):
         self.events += pygame.event.get(pygame.KEYUP)
         for event in self.events:
@@ -238,6 +245,27 @@ class PhotoSession(object):
     def get_image_name(self, count):
         return self.capture_start.strftime('%Y-%m-%d-%H%M%S') + '-' + str(count) + '.jpg'
 
+class Button(object):
+    def __init__(self, tty):
+        self.pressed = False
+        self.tty = tty
+        self.port = None
+        
+        if os.path.exists(TTY):
+            import serial
+            self.port = serial.Serial(self.tty, 0)
+            self.port.setDTR(level=True)
+
+    def is_pressed(self):
+        if self.port:
+            currently_pressed = self.port.getCD()
+            if currently_pressed and not self.pressed:
+                print "BUTTON PRESSED"
+                self.pressed = True
+                return True
+            elif not currently_pressed:
+                self.pressed = False
+        return False
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
