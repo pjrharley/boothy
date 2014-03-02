@@ -45,7 +45,7 @@ class Camera(object):
         if not self.camera:
             self.camera = piggyphoto.camera()
             print "needed new camera"
-        return StringIO.StringIO(self.camera.capture_preview().get_data())
+        return pygame.image.load(StringIO.StringIO(self.camera.capture_preview().get_data()))
     
     def capture_image(self, image_path):
         del self.camera
@@ -59,10 +59,27 @@ class Camera(object):
         del self.camera
         self.camera = None
 
+
+class WebcamCamera():
+    def __init__(self):
+        import pygame.camera
+        pygame.camera.init()
+        self.camera = pygame.camera.Camera("/dev/video0",(640,480))
+        self.camera.start()
+    
+    def capture_preview(self):
+        return self.camera.get_image()
+    
+    def capture_image(self, image_path):
+        pygame.image.save(self.capture_preview(), image_path)
+        
+    def sleep(self):
+        print "Sleep!"
+
 class DebugCamera():
     def capture_preview(self):
         with open('preview.jpg', 'rb') as img:
-            return StringIO.StringIO(img.read())
+            return pygame.image.load(StringIO.StringIO(img.read()))
     
     def capture_image(self, image_path):
         print "Captured an image!", image_path
@@ -71,10 +88,12 @@ class DebugCamera():
         print "Sleep!"
 
 class PhotoBooth(object):
-    def __init__(self, image_dest, fullscreen, debug, printing):
+    def __init__(self, image_dest, fullscreen, debug, webcam, printing):
         self.debug = debug
         if debug:
             self.camera = DebugCamera()
+        elif webcam:
+            self.camera = WebcamCamera()
         else:
             self.camera = Camera()
         
@@ -87,9 +106,8 @@ class PhotoBooth(object):
         self.current_session = None
 
     def capture_preview(self):
-        preview = self.camera.capture_preview()
+        picture = self.camera.capture_preview()
         
-        picture = pygame.image.load(preview)
         if self.size:
             picture = pygame.transform.scale(picture, self.size)
         picture = pygame.transform.flip(picture, True, False)
@@ -101,10 +119,13 @@ class PhotoBooth(object):
 
     def display_image(self, image_name):
         picture = self.load_image(image_name)
+        picture = pygame.transform.scale(picture, self.size)
         self.main_surface.blit(picture, (0, 0))
 
     def start(self):
         pygame.init()
+        pygame.mouse.set_visible(False)
+        
         self.clock = pygame.time.Clock()
         
         self.add_button_listener()
@@ -155,15 +176,19 @@ class PhotoBooth(object):
         self.main_surface.fill((0,0,0))
         self.render_text_centred('Press the button to start!')
 
-    def render_text_centred(self, text_string):
+    def render_text_centred(self, *text_lines):
         location = self.main_surface.get_rect()
         font = pygame.font.SysFont(pygame.font.get_default_font(), 142)
-        text = font.render(text_string, 1, (210, 210, 210))
-        textpos = text.get_rect()
-
-        textpos.centerx = location.centerx
-        textpos.centery = location.centery
-        self.main_surface.blit(text, textpos)
+        rendered_lines = [font.render(text, 1, (210, 210, 210)) for text in text_lines]
+        line_height = font.get_linesize()
+        middle_line = len(text_lines) / 2.0 - 0.5
+        
+        for i, line in enumerate(rendered_lines):
+            line_pos = line.get_rect()
+            lines_to_shift = i - middle_line
+            line_pos.centerx = location.centerx
+            line_pos.centery = location.centery + lines_to_shift * line_height
+            self.main_surface.blit(line, line_pos)
 
     def capture_image(self, file_name):
         self.camera.capture_image(os.path.join(self.output_dir, file_name))
@@ -179,7 +204,7 @@ class PhotoBooth(object):
         out_path = os.path.join(self.output_dir, out_name)
         first = self.load_image(images[0])
         size = (first.get_size()[0]/2, first.get_size()[1]/2)
-        print size
+        
         combined = pygame.Surface(first.get_size())
         for count, image_name in enumerate(images):
             image = self.load_image(image_name)
@@ -193,7 +218,10 @@ class PhotoBooth(object):
             pygame.image.save(combined, out_path)
         
         if self.printing:
-            call(["lpr", out_path])
+            if self.debug:
+                print "lpr", out_path
+            else:
+                call(["lpr", out_path])
 
     def add_button_listener(self):
         self.button = Button(TTY)
@@ -255,8 +283,7 @@ class PhotoSession(object):
         return not self.capture_start and time.time() - self.session_start > IDLE_TIME
     
     def do_countdown(self):
-        time_remaining = int(self.timer - time.time())
-        
+        time_remaining = self.timer - time.time()
         if time_remaining <= 0:
             image_name = self.get_image_name(self.photo_count)
             self.booth.capture_image(image_name)
@@ -271,7 +298,12 @@ class PhotoSession(object):
                 self.timer = time.time() + COUNT_DOWN_TIME + 1
                 self.photo_count += 1
         else:
-            self.booth.render_text_centred(str(time_remaining))
+            lines = [u'Taking picture %d of 4 in:' % self.photo_count, str(int(time_remaining))]
+            if time_remaining < 2.5 and int(time_remaining * 3) % 2 == 0:
+                lines = ["Look at the camera!", ""] + lines
+            else:
+                lines = ["", ""] + lines
+            self.booth.render_text_centred(*lines)
     
     def display_montage(self):
         if not self.montage_displayed:
@@ -320,12 +352,14 @@ class Button(object):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("save_to", help="Location to save images")
-    parser.add_argument("-d", "--debug", help="Don't require a real camera to be attached", action="store_true")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-d", "--debug", help="Don't require a real camera to be attached", action="store_true")
+    group.add_argument("-w", "--webcam", help="Use a webcam to capture images", action="store_true")
     parser.add_argument("--nofullscreen", help="Don't use fullscreen mode", action="store_true")
     parser.add_argument("--printing", help="Enable printing", action="store_true")
     args = parser.parse_args()
 
-    booth = PhotoBooth(args.save_to, fullscreen=(not args.nofullscreen), debug=args.debug, printing=args.printing)
+    booth = PhotoBooth(args.save_to, fullscreen=(not args.nofullscreen), debug=args.debug, webcam=args.webcam, printing=args.printing)
     booth.start()
 
 # TODO
