@@ -10,6 +10,7 @@ import argparse
 COUNT_DOWN_TIME = 1
 MONTAGE_DISPLAY_TIME = 2
 IDLE_TIME = 10
+IMAGE_DISPLAY_TIME = 3
 CAPTURE_SHUTTER_SPEED = '1/200'
 DEFAULT_PREVIEW_SHUTTER_SPEED = '1'
 
@@ -27,12 +28,16 @@ class Camera(object):
         #qq self.camera.leave_locked()
 
     def reset_settings(self):
-        pass
+        con = self.camera.config
+        con.main.capturesettings.autoexposuremode.value = 'AV'
+        self.camera.config = con
         #self.camera.config.main.capturesettings.shutterspeed.value = DEFAULT_PREVIEW_SHUTTER_SPEED
         #self.camera.config.main.capturesettings.aperture.value = DEFAULT_PREVIEW_APERTURE
 
     def set_settings_for_capture(self):
-        pass
+        con = self.camera.config
+        con.main.capturesettings.autoexposuremode.value = 'Manual'
+        self.camera.config = con
         #self.camera.config.main.capturesettings.shutterspeed.value = CAPTURE_SHUTTER_SPEED
         #self.camera.config.main.capturesettings.aperture.value = CAPTURE_APERTURE
 
@@ -89,6 +94,14 @@ class PhotoBooth(object):
             picture = pygame.transform.scale(picture, self.size)
         picture = pygame.transform.flip(picture, True, False)
         return picture
+
+    def display_preview(self):
+        picture = self.capture_preview()
+        self.main_surface.blit(picture, (0, 0))
+
+    def display_image(self, image_name):
+        picture = self.load_image(image_name)
+        self.main_surface.blit(picture, (0, 0))
 
     def start(self):
         pygame.init()
@@ -174,7 +187,10 @@ class PhotoBooth(object):
             x_pos = size[0] * (count % 2)
             y_pos = size[1] * (1 if count > 1 else 0)
             combined.blit(image, (x_pos, y_pos))
-        pygame.image.save(combined, out_path)
+        if self.debug:
+            print "Would save image to:", out_path
+        else:
+            pygame.image.save(combined, out_path)
         
         if self.printing:
             call(["lpr", out_path])
@@ -205,6 +221,7 @@ class PhotoSession(object):
         self.timer = -1
         self.photo_count = 1
         self.capture_start = None
+        self.display_timer = -1
         self.montage_timer = -1
         self.montage_displayed = False
         self.finished = False
@@ -214,14 +231,19 @@ class PhotoSession(object):
     def do_frame(self, button_pressed):
         if self.montage_timer > 0:
             self.display_montage()
+        elif self.display_timer > 0:
+            if time.time() - self.display_timer < IMAGE_DISPLAY_TIME:
+                print time.time() - self.display_timer < IMAGE_DISPLAY_TIME
+            else:
+                self.timer = time.time() + COUNT_DOWN_TIME + 1
+                self.display_timer = -1
         else:
-            picture = self.booth.capture_preview()
-            self.booth.main_surface.blit(picture, (0, 0))
+            self.booth.display_preview()
             if not self.capture_start:
                 self.booth.render_text_centred("Push when ready!")
         
-        if self.timer > 0:
-            self.do_countdown()
+            if self.timer > 0:
+                self.do_countdown()
         
         if button_pressed and not self.capture_start:
             self.timer = time.time() + COUNT_DOWN_TIME + 1
@@ -238,10 +260,13 @@ class PhotoSession(object):
         if time_remaining <= 0:
             image_name = self.get_image_name(self.photo_count)
             self.booth.capture_image(image_name)
+            if IMAGE_DISPLAY_TIME > 0:
+                self.display_timer = time.time()
+                self.booth.display_image(image_name)
             if self.photo_count == 4:
                 self.timer = -1
                 self.photo_count = 1
-                self.montage_timer = time.time()
+                self.montage_timer = time.time() + IMAGE_DISPLAY_TIME
             else:
                 self.timer = time.time() + COUNT_DOWN_TIME + 1
                 self.photo_count += 1
