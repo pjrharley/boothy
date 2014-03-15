@@ -6,6 +6,12 @@ import time, datetime
 import StringIO
 from subprocess import call
 import argparse
+import threading
+
+try:
+    import requests
+except ImportError:
+    requests = None
 
 COUNT_DOWN_TIME = 1
 MONTAGE_DISPLAY_TIME = 2
@@ -16,6 +22,9 @@ DEFAULT_PREVIEW_SHUTTER_SPEED = '1'
 
 CAPTURE_APERTURE = '8'
 DEFAULT_PREVIEW_APERTURE = '1.8'
+
+#PHOTO_API_KEY = '''***REMOVED***'''
+PHOTO_API_KEY = '''***REMOVED***'''
 
 TTY = '/dev/ttyUSB0'
 
@@ -90,7 +99,7 @@ class DebugCamera():
         print "Sleep!"
 
 class PhotoBooth(object):
-    def __init__(self, image_dest, fullscreen, debug, webcam, printing):
+    def __init__(self, image_dest, fullscreen, debug, webcam, printing, upload_to):
         self.debug = debug
         if debug:
             self.camera = DebugCamera()
@@ -100,7 +109,7 @@ class PhotoBooth(object):
             self.camera = Camera()
         
         self.printing = printing
-        
+        self.upload_to = upload_to
         self.output_dir = image_dest
         self.size = None
         self.fullscreen = fullscreen
@@ -232,6 +241,9 @@ class PhotoBooth(object):
                 print "lpr", out_path
             else:
                 call(["lpr", out_path])
+                
+        if self.upload_to:
+            UploadThread(self.upload_to, out_path).start()
 
     def add_button_listener(self):
         self.button = Button(TTY)
@@ -367,6 +379,24 @@ class Button(object):
                 self.pressed = False
         return False
 
+class UploadThread(threading.Thread):
+    def __init__(self, url, file_path):
+        super(UploadThread, self).__init__()
+        self.url = url
+        self.file_path = file_path
+
+    def run(self):
+        with open(self.file_path, 'rb') as f:
+            files = {'Filedata': f}
+            headers = {'X-API-TOKEN': PHOTO_API_KEY}
+            try:
+                r = requests.post(self.url, files=files, headers=headers)
+                r.raise_for_status()
+                print "Uploaded %s successfully" % self.file_path
+            except Exception as e:
+                print "Failed to upload %s. Err: %s"  % (self.file_path, e)
+            
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("save_to", help="Location to save images")
@@ -374,10 +404,15 @@ if __name__ == '__main__':
     group.add_argument("-d", "--debug", help="Don't require a real camera to be attached", action="store_true")
     group.add_argument("-w", "--webcam", help="Use a webcam to capture images", action="store_true")
     parser.add_argument("--nofullscreen", help="Don't use fullscreen mode", action="store_true")
-    parser.add_argument("--printing", help="Enable printing", action="store_true")
+    parser.add_argument("-p", "--printing", help="Enable printing", action="store_true")
+    parser.add_argument("-u", "--upload_to", help="Url to upload images to")
     args = parser.parse_args()
-
-    booth = PhotoBooth(args.save_to, fullscreen=(not args.nofullscreen), debug=args.debug, webcam=args.webcam, printing=args.printing)
+    
+    if args.upload_to and not requests:
+        print "Failed to find requests library, which is required for uploads."
+        sys.exit(-1)
+    
+    booth = PhotoBooth(args.save_to, fullscreen=(not args.nofullscreen), debug=args.debug, webcam=args.webcam, printing=args.printing, upload_to=args.upload_to)
     booth.start()
 
 # TODO
