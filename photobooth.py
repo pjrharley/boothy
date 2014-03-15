@@ -71,6 +71,7 @@ class WebcamCamera():
         return self.camera.get_image()
     
     def capture_image(self, image_path):
+        time.sleep(0.5)
         pygame.image.save(self.capture_preview(), image_path)
         
     def sleep(self):
@@ -82,6 +83,7 @@ class DebugCamera():
             return pygame.image.load(StringIO.StringIO(img.read()))
     
     def capture_image(self, image_path):
+        time.sleep(0.5)
         print "Captured an image!", image_path
         
     def sleep(self):
@@ -193,6 +195,14 @@ class PhotoBooth(object):
     def capture_image(self, file_name):
         self.camera.capture_image(os.path.join(self.output_dir, file_name))
 
+    def display_camera_arrow(self):
+        self.main_surface.fill((0,0,0))
+        arrow = pygame.Surface((300, 300))
+        pygame.draw.polygon(arrow, (255, 255, 255), ((100, 0), (200, 0), (200, 200), (300, 200), (150, 300), (0, 200), (100, 200)))
+        arrow = pygame.transform.flip(arrow, False, True) # qq sort the coords out instead
+        x = (self.size[0] - 300) / 2
+        self.main_surface.blit(arrow, (x, 20))
+
     def load_image(self, file_name):
         if self.debug:
             image_path = "test.jpg"
@@ -254,6 +264,7 @@ class PhotoSession(object):
         self.montage_displayed = False
         self.finished = False
         self.saved_image = False
+        self.take_picture = False
         self.session_start = time.time()
 
     def do_frame(self, button_pressed):
@@ -261,8 +272,10 @@ class PhotoSession(object):
             self.display_montage()
         elif self.display_timer > 0:
             if time.time() - self.display_timer < IMAGE_DISPLAY_TIME:
-                print time.time() - self.display_timer < IMAGE_DISPLAY_TIME
+                # still displaying last image
+                pass
             else:
+                print "finished displaying last image"
                 self.timer = time.time() + COUNT_DOWN_TIME + 1
                 self.display_timer = -1
         else:
@@ -284,7 +297,9 @@ class PhotoSession(object):
     
     def do_countdown(self):
         time_remaining = self.timer - time.time()
-        if time_remaining <= 0:
+        
+        if self.take_picture:
+            self.take_picture = False
             image_name = self.get_image_name(self.photo_count)
             self.booth.capture_image(image_name)
             if IMAGE_DISPLAY_TIME > 0:
@@ -297,6 +312,9 @@ class PhotoSession(object):
             else:
                 self.timer = time.time() + COUNT_DOWN_TIME + 1
                 self.photo_count += 1
+        elif time_remaining <= 0:
+            self.booth.display_camera_arrow()
+            self.take_picture = True
         else:
             lines = [u'Taking picture %d of 4 in:' % self.photo_count, str(int(time_remaining))]
             if time_remaining < 2.5 and int(time_remaining * 3) % 2 == 0:
