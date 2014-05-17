@@ -234,7 +234,6 @@ class PhotoBooth(object):
             UploadThread(self.upload_to, file_path).start()
 
     def display_camera_arrow(self, clear_screen=False):
-        logger.debug("Drawing an arrow")
         if clear_screen:
             self.main_surface.fill((0,0,0))
         arrow = pygame.Surface((300, 300), flags=pygame.SRCALPHA)
@@ -360,9 +359,11 @@ class PhotoSession(object):
             lines = [u'Taking picture %d of 4 in:' % self.photo_count, str(int(time_remaining))]
             if time_remaining < 2.5 and int(time_remaining * 2) % 2 == 0:
                 lines = ["Look at the camera!", ""] + lines
-            else:
+            elif time_remaining < 2.5:
                 lines = ["", ""] + lines
                 self.booth.display_camera_arrow()
+            else:
+                lines = ["", ""] + lines
             self.booth.render_text_centred(*lines)
 
     def display_montage(self):
