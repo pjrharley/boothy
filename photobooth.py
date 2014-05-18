@@ -39,6 +39,8 @@ PHOTO_API_KEY = '''***REMOVED***'''
 
 TTY = '/dev/ttyUSB0'
 
+PADDING_PERCENT = 1
+
 class Camera(object):
     def __init__(self):
         self.camera = piggyphoto.camera()
@@ -250,16 +252,22 @@ class PhotoBooth(object):
         return pygame.image.load(image_path)
 
     def save(self, out_name, images):
+        logging.info("Saving image: %s", out_name)
         out_path = os.path.join(self.output_dir, out_name)
-        first = self.load_image(images[0])
-        size = (first.get_size()[0]/2, first.get_size()[1]/2)
+        first_size = self.load_image(images[0]).get_size()
+        padding_pxls = int(PADDING_PERCENT / 100.0 * first_size[0])
+        logger.debug("Padding: %s", padding_pxls)
+        
+        size = ((first_size[0] - padding_pxls)/2, (first_size[1] - padding_pxls)/2)
+        logger.debug("Image size: %s", size)
 
-        combined = pygame.Surface(first.get_size())
+        combined = pygame.Surface(first_size)
+        combined.fill((255,255,255))
         for count, image_name in enumerate(images):
             image = self.load_image(image_name)
             image = pygame.transform.scale(image, size)
-            x_pos = size[0] * (count % 2)
-            y_pos = size[1] * (1 if count > 1 else 0)
+            x_pos = (size[0] + padding_pxls) * (count % 2)
+            y_pos = (size[1] + padding_pxls) * (1 if count > 1 else 0)
             combined.blit(image, (x_pos, y_pos))
         if self.debug:
             logging.info("Would save image to: %s", out_path)
@@ -448,7 +456,10 @@ if __name__ == '__main__':
         sys.exit(-1)
 
     booth = PhotoBooth(args.save_to, fullscreen=(not args.nofullscreen), debug=args.debug, webcam=args.webcam, printing=args.printing, upload_to=args.upload_to)
-    booth.start()
+    try:
+        booth.start()
+    except Exception:
+        logger.exception("Unhandled exception!")
 
     logger.info("Fin!")
 
