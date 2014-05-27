@@ -132,7 +132,7 @@ class PhotoBooth(object):
             self.count_down_time = 4
             self.image_display_time = 3
             self.montage_display_time = 15
-            self.idle_time = 120
+            self.idle_time = 240
 
 
         self.printing = printing
@@ -227,6 +227,18 @@ class PhotoBooth(object):
             line_pos.centerx = location.centerx
             line_pos.centery = location.centery + lines_to_shift * line_height
             self.main_surface.blit(line, line_pos)
+
+    def render_text_bottom(self, text, size=142):
+        location = self.main_surface.get_rect()
+        font = pygame.font.SysFont(pygame.font.get_default_font(), size)
+        line = font.render(text, 1, (210, 210, 210))
+        line_height = font.get_linesize()
+        
+        line_pos = line.get_rect()
+        line_pos.centerx = location.centerx
+        line_pos.centery = location.height - 2 * line_height
+        self.main_surface.blit(line, line_pos)
+
 
     def capture_image(self, file_name):
         file_path = os.path.join(self.output_dir, file_name)
@@ -387,6 +399,8 @@ class PhotoSession(object):
         elif not self.saved_image:
             self.booth.save(self.get_image_name('combined'), [self.get_image_name(im) for im in range(1,5)])
             self.saved_image = True
+            if self.booth.printing:
+                self.booth.render_text_bottom("Printing...", size=100)
 
         if time.time() - self.montage_timer > self.booth.montage_display_time:
             self.montage_timer = -1
