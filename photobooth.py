@@ -49,25 +49,40 @@ class Camera(object):
         #self.camera.config.main.actions.autofocusdrive=True
         #self.camera.config.main.actions.manualfocusdrive=2
         #qq self.camera.leave_locked()
-
+        
+    def try_set_capturesettings(self, setting):
+        for x in range(0, 10):
+            try:
+                con = self.camera.config
+                con.main.capturesettings.autoexposuremode.value = setting
+                self.camera.config = con
+                if x > 0:
+                    logger.info("Set capture settings after %d attempts", x)
+                return
+            except Exception, e:
+                logger.exception("Failed to set capturesettings, attempt %d", x)
+                if x == 10:
+                    raise e
+                else:
+                    time.sleep(x/2)
+                if x > 4 and x % 2 == 1:
+                    del self.camera
+                    self.camera = piggyphoto.camera()
+        
     def reset_settings(self):
-        con = self.camera.config
-        con.main.capturesettings.autoexposuremode.value = 'AV'
-        self.camera.config = con
+        self.try_set_capturesettings('AV')
         #self.camera.config.main.capturesettings.shutterspeed.value = DEFAULT_PREVIEW_SHUTTER_SPEED
         #self.camera.config.main.capturesettings.aperture.value = DEFAULT_PREVIEW_APERTURE
 
     def set_settings_for_capture(self):
-        con = self.camera.config
-        con.main.capturesettings.autoexposuremode.value = 'Manual'
-        self.camera.config = con
+        self.try_set_capturesettings('Manual')
         #self.camera.config.main.capturesettings.shutterspeed.value = CAPTURE_SHUTTER_SPEED
         #self.camera.config.main.capturesettings.aperture.value = CAPTURE_APERTURE
 
     def capture_preview(self):
         if not self.camera:
             self.camera = piggyphoto.camera()
-            logging.debug("Created new camera")
+            logger.debug("Created new camera")
         return pygame.image.load(StringIO.StringIO(self.camera.capture_preview().get_data()))
 
     def capture_image(self, image_path):
@@ -98,7 +113,7 @@ class WebcamCamera():
         pygame.image.save(self.capture_preview(), image_path)
 
     def sleep(self):
-        logging.info("Sleep!")
+        logger.info("Sleep!")
 
 class DebugCamera():
     def capture_preview(self):
@@ -107,10 +122,10 @@ class DebugCamera():
 
     def capture_image(self, image_path):
         time.sleep(0.5)
-        logging.info("Captured an image: %s", image_path)
+        logger.info("Captured an image: %s", image_path)
 
     def sleep(self):
-        logging.info("Sleep!")
+        logger.info("Sleep!")
 
 class PhotoBooth(object):
     def __init__(self, image_dest, fullscreen, debug, webcam, printing, upload_to):
@@ -264,7 +279,7 @@ class PhotoBooth(object):
         return pygame.image.load(image_path)
 
     def save(self, out_name, images):
-        logging.info("Saving image: %s", out_name)
+        logger.info("Saving image: %s", out_name)
         out_path = os.path.join(self.output_dir, out_name)
         first_size = self.load_image(images[0]).get_size()
         padding_pxls = int(PADDING_PERCENT / 100.0 * first_size[0])
@@ -282,14 +297,14 @@ class PhotoBooth(object):
             y_pos = (size[1] + padding_pxls) * (1 if count > 1 else 0)
             combined.blit(image, (x_pos, y_pos))
         if self.debug:
-            logging.info("Would save image to: %s", out_path)
+            logger.info("Would save image to: %s", out_path)
         else:
             pygame.image.save(combined, out_path)
 
         if self.printing:
             printing_cmd = ["lpr", "-P", "MG6200USB", "-#", str(self.printing), out_path]
             if self.debug:
-                logging.info(' '.join(printing_cmd))
+                logger.info(' '.join(printing_cmd))
             else:
                 call(printing_cmd)
 
@@ -335,7 +350,7 @@ class PhotoSession(object):
                 # still displaying last image
                 pass
             else:
-                logging.debug("finished displaying last image")
+                logger.debug("finished displaying last image")
                 self.timer = time.time() + self.booth.count_down_time + 1
                 self.display_timer = -1
         else:
