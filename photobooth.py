@@ -34,8 +34,8 @@ DEFAULT_PREVIEW_SHUTTER_SPEED = '1'
 CAPTURE_APERTURE = '8'
 DEFAULT_PREVIEW_APERTURE = '1.8'
 
-#PHOTO_API_KEY = '''***REMOVED***'''
 PHOTO_API_KEY = '''***REMOVED***'''
+#PHOTO_API_KEY = '''***REMOVED***'''
 
 TTY = '/dev/ttyUSB0'
 
@@ -61,7 +61,7 @@ class Camera(object):
                 return
             except Exception, e:
                 logger.exception("Failed to set capturesettings, attempt %d", x)
-                if x == 10:
+                if x >= 9:
                     raise e
                 else:
                     time.sleep(x/2)
@@ -86,12 +86,32 @@ class Camera(object):
         return pygame.image.load(StringIO.StringIO(self.camera.capture_preview().get_data()))
 
     def capture_image(self, image_path):
-        del self.camera
-        self.camera = piggyphoto.camera()
+        # Kludge - keep trying to capture the image
+        # gphoto throws exceptions if for example the camera can't focus
+        for x in range(0, 5):
+            try:
+                if hasattr(self, 'camera'):
+                    # Delete the camera object. This causes the mirror to close, otherwise
+                    # we don't get autofocus!
+                    del self.camera
+                self.camera = piggyphoto.camera()
 
-        self.set_settings_for_capture()
-        self.camera.capture_image(image_path)
-        self.reset_settings()
+                self.set_settings_for_capture()
+                self.camera.capture_image(image_path)
+                self.reset_settings()
+
+                if x > 0:
+                    logger.info("Captured image after %d attempts", x)
+                return
+            except Exception, e:
+                logger.exception("Failed to capture image, attempt %d", x)
+                if x >= 4:
+                    if hasattr(self, 'camera'):
+                        # Release the camera. Hopefully its more likely to work after a restart
+                        del self.camera
+                    raise e
+                else:
+                    time.sleep(x)
 
     def sleep(self):
         del self.camera
@@ -186,9 +206,8 @@ class PhotoBooth(object):
         if self.fullscreen:
             pygame.display.set_mode((0,0), pygame.FULLSCREEN)
         else:
-            raise Exception("I've broken non fullscreen for now")
-            preview = self.capture_preview()
-            pygame.display.set_mode(preview.get_size())
+            info = pygame.display.Info()
+            pygame.display.set_mode((info.current_w/2, info.current_h/2))
 
         self.main_surface = pygame.display.get_surface()
 
@@ -489,11 +508,6 @@ if __name__ == '__main__':
         booth.start()
     except Exception:
         logger.exception("Unhandled exception!")
-
-    logger.info("Fin!")
-
-# TODO
-# Investigate leave locked
-# Reinit the camera, or exit it when on black screen
-# Focusing?
-
+        sys.exit(-1)
+    finally:
+        logger.info("Fin!")

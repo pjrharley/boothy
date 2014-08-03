@@ -1,0 +1,26 @@
+Button instructions
+
+import serial
+s = serial.Serial('/dev/ttyUSB0', 0)
+s.setDTR(level=True)
+>>> s.getCD()
+False
+>>> s.getCD()
+True
+>>> s.getCD()
+True
+
+
+
+while True:                                                                                                                                                                                                                         
+  p = s.getCD()                                                                                                                                                                                                                         
+  if p != pressed:                                                                                                                                                                                                                     
+    print p                                                                                                                                                                                                                         
+    pressed = p                                                                                                                                                                                                                         
+  time.sleep(0.1)
+
+
+
+sudoedit /etc/udev/rules.d/50-ttyusb.rules
+
+KERNEL=="ttyUSB[0-9]*",NAME="tts/USB%n",SYMLINK+="%k",GROUP="uucp",MODE="0666"
