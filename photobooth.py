@@ -112,12 +112,13 @@ class PhotoBooth(object):
         button_press = self.space_pressed() or self.button.is_pressed()
 
         if self.current_session:
-            if self.current_session.do_frame(button_press):
-                # Start a new session
-                self.current_session = PhotoSession(self)
+            self.current_session.do_frame(button_press)
             if self.current_session.idle():
                 self.current_session = None
                 self.camera.sleep()
+            elif self.current_session.finished():
+                # Start a new session
+                self.current_session = PhotoSession(self)
         elif button_press:
             # Start a new session
             self.current_session = PhotoSession(self)
@@ -125,9 +126,6 @@ class PhotoBooth(object):
             self.wait()
 
         return self.check_for_quit_event()
-
-    def idle_timeout(self):
-        return False
 
     def wait(self):
         self.main_surface.fill((0,0,0))
@@ -182,13 +180,13 @@ class PhotoBooth(object):
             image_path = os.path.join(self.output_dir, file_name)
         return pygame.image.load(image_path)
 
-    def save(self, out_name, images):
+    def save_and_print_combined(self, out_name, images):
         logger.info("Saving image: %s", out_name)
         out_path = os.path.join(self.output_dir, out_name)
         first_size = self.load_image(images[0]).get_size()
         padding_pxls = int(PADDING_PERCENT / 100.0 * first_size[0])
         logger.debug("Padding: %s", padding_pxls)
-        
+
         size = ((first_size[0] - padding_pxls)/2, (first_size[1] - padding_pxls)/2)
         logger.debug("Image size: %s", size)
 
@@ -206,11 +204,14 @@ class PhotoBooth(object):
             pygame.image.save(combined, out_path)
 
         if self.printing:
-            printing_cmd = ["lpr", "-P", "MG6200USB", "-#", str(self.printing), out_path]
-            if self.debug:
-                logger.info(' '.join(printing_cmd))
-            else:
-                call(printing_cmd)
+            self.print_image(out_path)
+
+    def print_image(self, image_path):
+        printing_cmd = ["lpr", "-P", "MG6200USB", "-#", str(self.printing), image_path]
+        if self.debug:
+            logger.info(' '.join(printing_cmd))
+        else:
+            call(printing_cmd)
 
     def add_button_listener(self):
         self.button = Button()
@@ -231,103 +232,143 @@ class PhotoBooth(object):
             and not pygame.event.peek(pygame.QUIT)
 
 
-class PhotoSession(object):
-    def __init__(self, booth):
-        self.booth = booth
+class SessionState(object):
+    def __init__(self, session):
+        self.session = session
 
-        self.timer = -1
-        self.photo_count = 1
-        self.capture_start = None
-        self.display_timer = -1
-        self.montage_timer = -1
-        self.montage_displayed = False
-        self.finished = False
-        self.saved_image = False
-        self.take_picture = False
-        self.session_start = time.time()
+    def run(self):
+        raise NotImplementedError("Run not implemented")
 
-    def do_frame(self, button_pressed):
-        if self.montage_timer > 0:
-            self.display_montage()
-        elif self.display_timer > 0:
-            if time.time() - self.display_timer < self.booth.image_display_time:
-                # still displaying last image
-                pass
-            else:
-                logger.debug("finished displaying last image")
-                self.timer = time.time() + self.booth.count_down_time + 1
-                self.display_timer = -1
+    def next(self, button_pressed):
+        raise NotImplementedError("Next not implemented")
+
+
+class WaitingState(SessionState):
+    def run(self):
+        self.session.booth.display_preview()
+        self.session.booth.render_text_centred("Push when ready!")
+
+    def next(self, button_pressed):
+        if button_pressed:
+            self.session.capture_start = datetime.datetime.now()
+            return CountdownState(self.session)
         else:
-            self.booth.display_preview()
-            if not self.capture_start:
-                self.booth.render_text_centred("Push when ready!")
+            return self
 
-            if self.timer > 0:
-                self.do_countdown()
+class CountdownState(SessionState):
+    def __init__(self, session):
+        super(CountdownState, self).__init__(session)
+        self.timer = time.time() + session.booth.count_down_time + 1
+        self.capture_start = datetime.datetime.now()
 
-        if button_pressed and not self.capture_start:
-            self.timer = time.time() + self.booth.count_down_time + 1
-            self.capture_start = datetime.datetime.now()
+    def run(self):
+        self.session.booth.display_preview()
+        self.display_countdown()
 
-        return self.finished
-
-    def idle(self):
-        return not self.capture_start and time.time() - self.session_start > self.booth.idle_time
-
-    def do_countdown(self):
+    def display_countdown(self):
         time_remaining = self.timer - time.time()
 
-        if self.take_picture:
-            self.take_picture = False
-            image_name = self.get_image_name(self.photo_count)
-            self.booth.capture_image(image_name)
-            if self.booth.image_display_time > 0:
-                self.display_timer = time.time()
-                self.booth.display_image(image_name)
-            if self.photo_count == 4:
-                self.timer = -1
-                self.photo_count = 1
-                self.montage_timer = time.time() + self.booth.image_display_time
-            else:
-                self.timer = time.time() + self.booth.count_down_time + 1
-                self.photo_count += 1
-        elif time_remaining <= 0:
-            self.booth.display_camera_arrow(True)
-            self.take_picture = True
+        if time_remaining <= 0:
+            self.session.booth.display_camera_arrow(clear_screen=True)
         else:
-            lines = [u'Taking picture %d of 4 in:' % self.photo_count, str(int(time_remaining))]
+            lines = [u'Taking picture %d of 4 in:' % self.session.photo_count, str(int(time_remaining))]
             if time_remaining < 2.5 and int(time_remaining * 2) % 2 == 0:
                 lines = ["Look at the camera!", ""] + lines
             elif time_remaining < 2.5:
                 lines = ["", ""] + lines
-                self.booth.display_camera_arrow()
+                self.session.booth.display_camera_arrow()
             else:
                 lines = ["", ""] + lines
-            self.booth.render_text_centred(*lines)
+            self.session.booth.render_text_centred(*lines)
 
-    def display_montage(self):
-        if not self.montage_displayed:
+    def next(self, button_pressed):
+        if self.timer - time.time() <= 0:
+            image = self.take_picture()
+            return ShowLastCaptureState(self.session, image)
+        else:
+            return self
+
+    def take_picture(self):
+        self.session.photo_count += 1
+        image_name = self.session.get_image_name(self.session.photo_count)
+        self.session.booth.capture_image(image_name)
+        return image_name
+
+
+class ShowLastCaptureState(SessionState):
+    def __init__(self, session, image):
+        super(ShowLastCaptureState, self).__init__(session)
+        self.image = image
+        self.timer = time.time() + session.booth.image_display_time
+
+    def run(self):
+        self.session.booth.display_image(self.image)
+
+    def next(self, button_pressed):
+        if self.timer - time.time() <= 0:
+            if self.session.photo_count == 4:
+                return ShowSessionMontageState(self.session)
+            else:
+                return CountdownState(self.session)
+        else:
+            return self
+
+
+class ShowSessionMontageState(SessionState):
+    def __init__(self, session):
+        super(ShowSessionMontageState, self).__init__(session)
+        self.timer = time.time() + session.booth.montage_display_time
+        self.displayed = False
+        self.saved = False
+
+    def run(self):
+        if not self.displayed:
             for im in range(1, 5):
-                image = self.booth.load_image(self.get_image_name(im))
-                size = (self.booth.size[0]/2, self.booth.size[1]/2)
+                image = self.session.booth.load_image(self.session.get_image_name(im))
+                size = (self.session.booth.size[0]/2, self.session.booth.size[1]/2)
                 image = pygame.transform.scale(image, size)
                 x_pos = size[0] * ((im - 1) % 2)
                 y_pos = size[1] * (1 if im > 2 else 0)
-                self.booth.main_surface.blit(image, (x_pos, y_pos))
-            self.montage_displayed = True
-        elif not self.saved_image:
-            self.booth.save(self.get_image_name('combined'), [self.get_image_name(im) for im in range(1,5)])
-            self.saved_image = True
-            if self.booth.printing:
-                self.booth.render_text_bottom("Printing...", size=100)
+                self.session.booth.main_surface.blit(image, (x_pos, y_pos))
+            self.displayed = True
+        elif not self.saved:
+            self.session.booth.save_and_print_combined(
+                self.session.get_image_name('combined'),
+                [self.session.get_image_name(im) for im in range(1, 5)])
+            self.saved = True
+            if self.session.booth.printing:
+                self.session.booth.render_text_bottom("Printing...", size=100)
 
-        if time.time() - self.montage_timer > self.booth.montage_display_time:
-            self.montage_timer = -1
-            self.montage_displayed = False
-            self.finished = True
+    def next(self, button_pressed):
+        if self.timer - time.time() <= 0:
+            return None
+        else:
+            return self
+
+
+
+class PhotoSession(object):
+    def __init__(self, booth):
+        self.booth = booth
+
+        self.state = WaitingState(self)
+        self.capture_start = None
+        self.photo_count = 0
+        self.session_start = time.time()
+
+    def do_frame(self, button_pressed):
+        self.state.run()
+
+        self.state = self.state.next(button_pressed)
+
+    def idle(self):
+        return not self.capture_start and time.time() - self.session_start > self.booth.idle_time
 
     def get_image_name(self, count):
         return self.capture_start.strftime('%Y-%m-%d-%H%M%S') + '-' + str(count) + '.jpg'
+
+    def finished(self):
+        return self.state is None
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
