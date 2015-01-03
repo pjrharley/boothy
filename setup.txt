@@ -8,7 +8,6 @@ flash  - 1/16-1/8th, depending on aperture chosen
        - use disposible batteries, they're way better.
        
 
-
 Test link http://www.peteandbecky.co.uk/photos/photobooth-test-run/upload/Zrl0zoc3MDpkAUsFJl1A8wgCYymsm3NR/
 REAL link http://www.peteandbecky.co.uk/photos/photobooth/upload/wnI88fhlk3saGWg7QqmC4wTEICN9zHDi/
 
@@ -19,7 +18,25 @@ Parts to remember
 Laptop
 Laptop charger
 Printer
-Printer Cable
-Remote trigger
+Printer USB
+Printer power
+Printer ink
+Printer paper
+Remote trigger (spare)
+Camera
+Camera power adaptor
+Monitor
+Monitor power
+Monitor cable
+Kettle lead for box
+Button
+Button lead
+Power for button / fan
+USB for camera
+Flash
+Soft box
+Flash batteries
+Flash cable
+
 
 
