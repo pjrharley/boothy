@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 
-import piggyphoto, pygame
-import os, sys
-import time, datetime
-import StringIO
+import pygame
+import os
+import sys
+import time
+import datetime
 from subprocess import call
 import argparse
-import threading
-
 import logging
+
+from cameras import DebugCamera, WebcamCamera, Camera
+from button import Button
 
 logger = logging.getLogger('photobooth')
 
@@ -24,128 +26,11 @@ logger.addHandler(stdout_log_handler)
 logger.setLevel(logging.DEBUG)
 
 try:
-    import requests
+    from upload import upload_image_async
 except ImportError:
-    requests = None
-
-CAPTURE_SHUTTER_SPEED = '1/200'
-DEFAULT_PREVIEW_SHUTTER_SPEED = '1'
-
-CAPTURE_APERTURE = '8'
-DEFAULT_PREVIEW_APERTURE = '1.8'
-
-PHOTO_API_KEY = '''***REMOVED***'''
-#PHOTO_API_KEY = '''***REMOVED***'''
-
-TTY = '/dev/ttyUSB0'
+    upload_image_async = None
 
 PADDING_PERCENT = 1
-
-class Camera(object):
-    def __init__(self):
-        self.camera = piggyphoto.camera()
-        self.reset_settings()
-
-        #self.camera.config.main.actions.autofocusdrive=True
-        #self.camera.config.main.actions.manualfocusdrive=2
-        #qq self.camera.leave_locked()
-        
-    def try_set_capturesettings(self, setting):
-        for x in range(0, 10):
-            try:
-                con = self.camera.config
-                con.main.capturesettings.autoexposuremode.value = setting
-                self.camera.config = con
-                if x > 0:
-                    logger.info("Set capture settings after %d attempts", x)
-                return
-            except Exception, e:
-                logger.exception("Failed to set capturesettings, attempt %d", x)
-                if x >= 9:
-                    raise e
-                else:
-                    time.sleep(x/2)
-                if x > 4 and x % 2 == 1:
-                    del self.camera
-                    self.camera = piggyphoto.camera()
-        
-    def reset_settings(self):
-        self.try_set_capturesettings('AV')
-        #self.camera.config.main.capturesettings.shutterspeed.value = DEFAULT_PREVIEW_SHUTTER_SPEED
-        #self.camera.config.main.capturesettings.aperture.value = DEFAULT_PREVIEW_APERTURE
-
-    def set_settings_for_capture(self):
-        self.try_set_capturesettings('Manual')
-        #self.camera.config.main.capturesettings.shutterspeed.value = CAPTURE_SHUTTER_SPEED
-        #self.camera.config.main.capturesettings.aperture.value = CAPTURE_APERTURE
-
-    def capture_preview(self):
-        if not self.camera:
-            self.camera = piggyphoto.camera()
-            logger.debug("Created new camera")
-        return pygame.image.load(StringIO.StringIO(self.camera.capture_preview().get_data()))
-
-    def capture_image(self, image_path):
-        # Kludge - keep trying to capture the image
-        # gphoto throws exceptions if for example the camera can't focus
-        for x in range(0, 5):
-            try:
-                if hasattr(self, 'camera'):
-                    # Delete the camera object. This causes the mirror to close, otherwise
-                    # we don't get autofocus!
-                    del self.camera
-                self.camera = piggyphoto.camera()
-
-                self.set_settings_for_capture()
-                self.camera.capture_image(image_path)
-                self.reset_settings()
-
-                if x > 0:
-                    logger.info("Captured image after %d attempts", x)
-                return
-            except Exception, e:
-                logger.exception("Failed to capture image, attempt %d", x)
-                if x >= 4:
-                    if hasattr(self, 'camera'):
-                        # Release the camera. Hopefully its more likely to work after a restart
-                        del self.camera
-                    raise e
-                else:
-                    time.sleep(x)
-
-    def sleep(self):
-        del self.camera
-        self.camera = None
-
-
-class WebcamCamera():
-    def __init__(self):
-        import pygame.camera
-        pygame.camera.init()
-        self.camera = pygame.camera.Camera("/dev/video0",(640,480))
-        self.camera.start()
-
-    def capture_preview(self):
-        return self.camera.get_image()
-
-    def capture_image(self, image_path):
-        time.sleep(0.5)
-        pygame.image.save(self.capture_preview(), image_path)
-
-    def sleep(self):
-        logger.info("Sleep!")
-
-class DebugCamera():
-    def capture_preview(self):
-        with open('preview.jpg', 'rb') as img:
-            return pygame.image.load(StringIO.StringIO(img.read()))
-
-    def capture_image(self, image_path):
-        time.sleep(0.5)
-        logger.info("Captured an image: %s", image_path)
-
-    def sleep(self):
-        logger.info("Sleep!")
 
 class PhotoBooth(object):
     def __init__(self, image_dest, fullscreen, debug, webcam, printing, upload_to):
@@ -279,7 +164,7 @@ class PhotoBooth(object):
         logger.info("Capturing image to: %s", file_path)
         self.camera.capture_image(file_path)
         if self.upload_to:
-            UploadThread(self.upload_to, file_path).start()
+            upload_image_async(self.upload_to, file_path)
 
     def display_camera_arrow(self, clear_screen=False):
         if clear_screen:
@@ -328,7 +213,7 @@ class PhotoBooth(object):
                 call(printing_cmd)
 
     def add_button_listener(self):
-        self.button = Button(TTY)
+        self.button = Button()
 
     def check_key_event(self, *keys):
         self.events += pygame.event.get(pygame.KEYUP)
@@ -444,47 +329,6 @@ class PhotoSession(object):
     def get_image_name(self, count):
         return self.capture_start.strftime('%Y-%m-%d-%H%M%S') + '-' + str(count) + '.jpg'
 
-class Button(object):
-    def __init__(self, tty):
-        self.pressed = False
-        self.tty = tty
-        self.port = None
-
-        if os.path.exists(TTY):
-            import serial
-            self.port = serial.Serial(self.tty, 0)
-            self.port.setDTR(level=True)
-
-    def is_pressed(self):
-        if self.port:
-            currently_pressed = self.port.getCD()
-            if currently_pressed and not self.pressed:
-                logger.info("Button press detected")
-                self.pressed = True
-                return True
-            elif not currently_pressed:
-                self.pressed = False
-        return False
-
-class UploadThread(threading.Thread):
-    def __init__(self, url, file_path):
-        super(UploadThread, self).__init__()
-        self.url = url
-        self.file_path = file_path
-
-    def run(self):
-        logger.info("Uploading to website: %s", self.file_path)
-        with open(self.file_path, 'rb') as f:
-            files = {'Filedata': f}
-            headers = {'X-API-TOKEN': PHOTO_API_KEY}
-            try:
-                r = requests.post(self.url, files=files, headers=headers)
-                r.raise_for_status()
-                logger.info("Uploaded %s successfully", self.file_path)
-            except Exception as e:
-                logger.exception("Failed to upload %s. ", self.file_path)
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("save_to", help="Location to save images")
@@ -498,7 +342,7 @@ if __name__ == '__main__':
 
     logger.info("Args were: %s", args)
 
-    if args.upload_to and not requests:
+    if args.upload_to and not upload_image_async:
         print "Failed to find requests library, which is required for uploads."
         logger.error("Failed to find requests library.")
         sys.exit(-1)
