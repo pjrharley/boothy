@@ -43,13 +43,13 @@ class PhotoBooth(object):
             self.camera = Camera()
 
         if self.debug:
-            self.count_down_time = 1
+            self.count_down_time = 2
             self.image_display_time = 3
             self.montage_display_time = 8
             self.idle_time = 30
 
         else:
-            self.count_down_time = 4
+            self.count_down_time = 5
             self.image_display_time = 3
             self.montage_display_time = 15
             self.idle_time = 240
@@ -242,6 +242,13 @@ class SessionState(object):
     def next(self, button_pressed):
         raise NotImplementedError("Next not implemented")
 
+class TimedState(SessionState):
+    def __init__(self, session, timer_length_s):
+        super(TimedState, self).__init__(session)
+        self.timer = time.time() + timer_length_s
+
+    def time_up(self):
+        return self.timer <= time.time()
 
 class WaitingState(SessionState):
     def run(self):
@@ -255,10 +262,9 @@ class WaitingState(SessionState):
         else:
             return self
 
-class CountdownState(SessionState):
+class CountdownState(TimedState):
     def __init__(self, session):
-        super(CountdownState, self).__init__(session)
-        self.timer = time.time() + session.booth.count_down_time + 1
+        super(CountdownState, self).__init__(session, session.booth.count_down_time)
         self.capture_start = datetime.datetime.now()
 
     def run(self):
@@ -271,7 +277,7 @@ class CountdownState(SessionState):
         if time_remaining <= 0:
             self.session.booth.display_camera_arrow(clear_screen=True)
         else:
-            lines = [u'Taking picture %d of 4 in:' % self.session.photo_count, str(int(time_remaining))]
+            lines = [u'Taking picture %d of 4 in:' % self.session.photo_count + 1, str(int(time_remaining))]
             if time_remaining < 2.5 and int(time_remaining * 2) % 2 == 0:
                 lines = ["Look at the camera!", ""] + lines
             elif time_remaining < 2.5:
@@ -282,7 +288,7 @@ class CountdownState(SessionState):
             self.session.booth.render_text_centred(*lines)
 
     def next(self, button_pressed):
-        if self.timer - time.time() <= 0:
+        if self.time_up():
             image = self.take_picture()
             return ShowLastCaptureState(self.session, image)
         else:
@@ -295,17 +301,16 @@ class CountdownState(SessionState):
         return image_name
 
 
-class ShowLastCaptureState(SessionState):
+class ShowLastCaptureState(TimedState):
     def __init__(self, session, image):
-        super(ShowLastCaptureState, self).__init__(session)
+        super(ShowLastCaptureState, self).__init__(session, session.booth.image_display_time)
         self.image = image
-        self.timer = time.time() + session.booth.image_display_time
 
     def run(self):
         self.session.booth.display_image(self.image)
 
     def next(self, button_pressed):
-        if self.timer - time.time() <= 0:
+        if self.time_up():
             if self.session.photo_count == 4:
                 return ShowSessionMontageState(self.session)
             else:
@@ -314,10 +319,9 @@ class ShowLastCaptureState(SessionState):
             return self
 
 
-class ShowSessionMontageState(SessionState):
+class ShowSessionMontageState(TimedState):
     def __init__(self, session):
-        super(ShowSessionMontageState, self).__init__(session)
-        self.timer = time.time() + session.booth.montage_display_time
+        super(ShowSessionMontageState, self).__init__(session, session.booth.montage_display_time)
         self.displayed = False
         self.saved = False
 
@@ -340,7 +344,7 @@ class ShowSessionMontageState(SessionState):
                 self.session.booth.render_text_bottom("Printing...", size=100)
 
     def next(self, button_pressed):
-        if self.timer - time.time() <= 0:
+        if self.time_up():
             return None
         else:
             return self
