@@ -277,7 +277,7 @@ class CountdownState(TimedState):
         if time_remaining <= 0:
             self.session.booth.display_camera_arrow(clear_screen=True)
         else:
-            lines = [u'Taking picture %d of 4 in:' % self.session.photo_count + 1, str(int(time_remaining))]
+            lines = [u'Taking picture %d of 4 in:' % (self.session.photo_count + 1), str(int(time_remaining))]
             if time_remaining < 2.5 and int(time_remaining * 2) % 2 == 0:
                 lines = ["Look at the camera!", ""] + lines
             elif time_remaining < 2.5:
