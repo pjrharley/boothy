@@ -30,10 +30,11 @@ try:
 except ImportError:
     upload_image_async = None
 
-PADDING_PERCENT = 1
+PADDING_PERCENT = 1.5
+PRINT_IMAGE_SIZE = None # "3498x2478"
 
 class PhotoBooth(object):
-    def __init__(self, image_dest, fullscreen, debug, webcam, printing, upload_to):
+    def __init__(self, image_dest, fullscreen, debug, webcam, print_count, printer, upload_to):
         self.debug = debug
         if debug:
             self.camera = DebugCamera()
@@ -55,7 +56,8 @@ class PhotoBooth(object):
             self.idle_time = 240
 
 
-        self.printing = printing
+        self.print_count = print_count
+        self.printer = printer
         self.upload_to = upload_to
         self.output_dir = image_dest
         self.size = None
@@ -198,19 +200,34 @@ class PhotoBooth(object):
             x_pos = (size[0] + padding_pxls) * (count % 2)
             y_pos = (size[1] + padding_pxls) * (1 if count > 1 else 0)
             combined.blit(image, (x_pos, y_pos))
-        if self.debug:
-            logger.info("Would save image to: %s", out_path)
-        else:
+
+        logger.info("Save image to: %s", out_path)
+        if not self.debug:
             pygame.image.save(combined, out_path)
 
-        if self.printing:
-            self.print_image(out_path)
+        if self.print_count:
+            if PRINT_IMAGE_SIZE:
+                print_dir = os.path.join(self.output_dir, 'to_print')
+                print_path = os.path.join(print_dir, out_name)
+                convert_cmd = ['convert', out_path, '-resize', PRINT_IMAGE_SIZE + '^', '-gravity', 'center', '-extent', PRINT_IMAGE_SIZE, print_path]
+
+                logger.info(' '.join(convert_cmd))
+                if not self.debug:
+                    if not os.path.exists(print_dir):
+                        os.makedirs(print_dir)
+                    call(convert_cmd)
+            else:
+                print_path = out_path
+            self.print_image(print_path)
 
     def print_image(self, image_path):
-        printing_cmd = ["lpr", "-P", "MG6200USB", "-#", str(self.printing), image_path]
-        if self.debug:
-            logger.info(' '.join(printing_cmd))
-        else:
+        printing_cmd = ["lpr"]
+        if self.printer:
+            printing_cmd += ["-P", self.printer]
+        printing_cmd += ["-#", str(self.print_count), image_path]
+
+        logger.info(' '.join(printing_cmd))
+        if not self.debug:
             call(printing_cmd)
 
     def add_button_listener(self):
@@ -340,7 +357,7 @@ class ShowSessionMontageState(TimedState):
                 self.session.get_image_name('combined'),
                 [self.session.get_image_name(im) for im in range(1, 5)])
             self.saved = True
-            if self.session.booth.printing:
+            if self.session.booth.print_count:
                 self.session.booth.render_text_bottom("Printing...", size=100)
 
     def next(self, button_pressed):
@@ -381,7 +398,8 @@ if __name__ == '__main__':
     group.add_argument("-d", "--debug", help="Don't require a real camera to be attached", action="store_true")
     group.add_argument("-w", "--webcam", help="Use a webcam to capture images", action="store_true")
     parser.add_argument("--nofullscreen", help="Don't use fullscreen mode", action="store_true")
-    parser.add_argument("-p", "--printing", help="Set number of copies to print", type=int, default=0)
+    parser.add_argument("-p", "--print_count", help="Set number of copies to print", type=int, default=0)
+    parser.add_argument("-P", "--printer", help="Set printer to use", default=None)
     parser.add_argument("-u", "--upload_to", help="Url to upload images to")
     args = parser.parse_args()
 
@@ -392,7 +410,7 @@ if __name__ == '__main__':
         logger.error("Failed to find requests library.")
         sys.exit(-1)
 
-    booth = PhotoBooth(args.save_to, fullscreen=(not args.nofullscreen), debug=args.debug, webcam=args.webcam, printing=args.printing, upload_to=args.upload_to)
+    booth = PhotoBooth(args.save_to, fullscreen=(not args.nofullscreen), debug=args.debug, webcam=args.webcam, print_count=args.print_count, printer=args.printer, upload_to=args.upload_to)
     try:
         booth.start()
     except Exception:

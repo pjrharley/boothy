@@ -3,6 +3,7 @@ camera - turn off sleep timer
        - autofocus mode - enable all focus points
        - set to manual, 1/200. Set aperture, 7.1 ish
        - turn off raw
+        - turn off back button focus
 flash  - 1/16-1/8th, depending on aperture chosen
        - disable sleep mode - red light should be on. Hold music note
        - use disposible batteries, they're way better.
