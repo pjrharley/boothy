@@ -1,0 +1,3 @@
+hg+http://bitbucket.org/pygame/pygame
+-e git+https://github.com/pjrharley/piggyphoto.git#egg=PZiggyphoto
+requests
