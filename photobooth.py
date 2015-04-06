@@ -31,7 +31,8 @@ except ImportError:
     upload_image_async = None
 
 PADDING_PERCENT = 1.5
-PRINT_IMAGE_SIZE = None # "3498x2478"
+PRINT_IMAGE_SIZE = None  # "3498x2478"
+
 
 class PhotoBooth(object):
     def __init__(self, image_dest, fullscreen, debug, webcam, print_count, printer, upload_to):
@@ -54,7 +55,6 @@ class PhotoBooth(object):
             self.image_display_time = 3
             self.montage_display_time = 15
             self.idle_time = 240
-
 
         self.print_count = print_count
         self.printer = printer
@@ -91,7 +91,7 @@ class PhotoBooth(object):
         self.add_button_listener()
 
         if self.fullscreen:
-            pygame.display.set_mode((0,0), pygame.FULLSCREEN)
+            pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         else:
             info = pygame.display.Info()
             pygame.display.set_mode((info.current_w/2, info.current_h/2))
@@ -130,7 +130,7 @@ class PhotoBooth(object):
         return self.check_for_quit_event()
 
     def wait(self):
-        self.main_surface.fill((0,0,0))
+        self.main_surface.fill((0, 0, 0))
         self.render_text_centred('Press the button to start!')
 
     def render_text_centred(self, *text_lines):
@@ -152,12 +152,11 @@ class PhotoBooth(object):
         font = pygame.font.SysFont(pygame.font.get_default_font(), size)
         line = font.render(text, 1, (210, 210, 210))
         line_height = font.get_linesize()
-        
+
         line_pos = line.get_rect()
         line_pos.centerx = location.centerx
         line_pos.centery = location.height - 2 * line_height
         self.main_surface.blit(line, line_pos)
-
 
     def capture_image(self, file_name):
         file_path = os.path.join(self.output_dir, file_name)
@@ -168,10 +167,13 @@ class PhotoBooth(object):
 
     def display_camera_arrow(self, clear_screen=False):
         if clear_screen:
-            self.main_surface.fill((0,0,0))
+            self.main_surface.fill((0, 0, 0))
         arrow = pygame.Surface((300, 300), flags=pygame.SRCALPHA)
-        pygame.draw.polygon(arrow, (255, 255, 255), ((100, 0), (200, 0), (200, 200), (300, 200), (150, 300), (0, 200), (100, 200)))
-        arrow = pygame.transform.flip(arrow, False, True) # qq sort the coords out instead
+        pygame.draw.polygon(arrow, (255, 255, 255),
+                            ((100, 0), (200, 0), (200, 200),
+                             (300, 200), (150, 300), (0, 200), (100, 200)))
+        # TODO: Update the coordinates above instead of this
+        arrow = pygame.transform.flip(arrow, False, True)
         x = (self.size[0] - 300) / 2
         self.main_surface.blit(arrow, (x, 20))
 
@@ -193,7 +195,7 @@ class PhotoBooth(object):
         logger.debug("Image size: %s", size)
 
         combined = pygame.Surface(first_size)
-        combined.fill((255,255,255))
+        combined.fill((255, 255, 255))
         for count, image_name in enumerate(images):
             image = self.load_image(image_name)
             image = pygame.transform.scale(image, size)
@@ -209,7 +211,9 @@ class PhotoBooth(object):
             if PRINT_IMAGE_SIZE:
                 print_dir = os.path.join(self.output_dir, 'to_print')
                 print_path = os.path.join(print_dir, out_name)
-                convert_cmd = ['convert', out_path, '-resize', PRINT_IMAGE_SIZE + '^', '-gravity', 'center', '-extent', PRINT_IMAGE_SIZE, print_path]
+                convert_cmd = ['convert', out_path, '-resize',
+                               PRINT_IMAGE_SIZE + '^', '-gravity', 'center',
+                               '-extent', PRINT_IMAGE_SIZE, print_path]
 
                 logger.info(' '.join(convert_cmd))
                 if not self.debug:
@@ -259,6 +263,7 @@ class SessionState(object):
     def next(self, button_pressed):
         raise NotImplementedError("Next not implemented")
 
+
 class TimedState(SessionState):
     def __init__(self, session, timer_length_s):
         super(TimedState, self).__init__(session)
@@ -266,6 +271,7 @@ class TimedState(SessionState):
 
     def time_up(self):
         return self.timer <= time.time()
+
 
 class WaitingState(SessionState):
     def run(self):
@@ -278,6 +284,7 @@ class WaitingState(SessionState):
             return CountdownState(self.session)
         else:
             return self
+
 
 class CountdownState(TimedState):
     def __init__(self, session):
@@ -294,7 +301,8 @@ class CountdownState(TimedState):
         if time_remaining <= 0:
             self.session.booth.display_camera_arrow(clear_screen=True)
         else:
-            lines = [u'Taking picture %d of 4 in:' % (self.session.photo_count + 1), str(int(time_remaining))]
+            lines = [u'Taking picture %d of 4 in:' %
+                     (self.session.photo_count + 1), str(int(time_remaining))]
             if time_remaining < 2.5 and int(time_remaining * 2) % 2 == 0:
                 lines = ["Look at the camera!", ""] + lines
             elif time_remaining < 2.5:
@@ -367,7 +375,6 @@ class ShowSessionMontageState(TimedState):
             return self
 
 
-
 class PhotoSession(object):
     def __init__(self, booth):
         self.booth = booth
@@ -395,10 +402,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("save_to", help="Location to save images")
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("-d", "--debug", help="Don't require a real camera to be attached", action="store_true")
+    group.add_argument("-d", "--debug",
+                       help="Don't require a real camera to be attached", action="store_true")
     group.add_argument("-w", "--webcam", help="Use a webcam to capture images", action="store_true")
     parser.add_argument("--nofullscreen", help="Don't use fullscreen mode", action="store_true")
-    parser.add_argument("-p", "--print_count", help="Set number of copies to print", type=int, default=0)
+    parser.add_argument("-p", "--print_count",
+                        help="Set number of copies to print", type=int, default=0)
     parser.add_argument("-P", "--printer", help="Set printer to use", default=None)
     parser.add_argument("-u", "--upload_to", help="Url to upload images to")
     args = parser.parse_args()
@@ -410,7 +419,13 @@ if __name__ == '__main__':
         logger.error("Failed to find requests library.")
         sys.exit(-1)
 
-    booth = PhotoBooth(args.save_to, fullscreen=(not args.nofullscreen), debug=args.debug, webcam=args.webcam, print_count=args.print_count, printer=args.printer, upload_to=args.upload_to)
+    booth = PhotoBooth(args.save_to,
+                       fullscreen=(not args.nofullscreen),
+                       debug=args.debug,
+                       webcam=args.webcam,
+                       print_count=args.print_count,
+                       printer=args.printer,
+                       upload_to=args.upload_to)
     try:
         booth.start()
     except Exception:
