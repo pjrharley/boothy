@@ -5,8 +5,7 @@ import logging
 
 logger = logging.getLogger('photobooth.upload')
 
-PHOTO_API_KEY = '''***REMOVED***'''
-#PHOTO_API_KEY = '''***REMOVED***'''
+PHOTO_API_KEY = '''TODO: Your API key here'''
 
 
 def upload_image_async(upload_to, file_path):
@@ -28,5 +27,5 @@ class UploadThread(threading.Thread):
                 r = requests.post(self.url, files=files, headers=headers)
                 r.raise_for_status()
                 logger.info("Uploaded %s successfully", self.file_path)
-            except Exception as e:
+            except Exception:
                 logger.exception("Failed to upload %s. ", self.file_path)

@@ -2,9 +2,10 @@
 import os
 import logging
 
-logger = logging.getLogger('photobooth.upload')
+logger = logging.getLogger('photobooth.button')
 
 DEFAULT_TTY = '/dev/ttyUSB0'
+
 
 class Button(object):
     def __init__(self, tty=DEFAULT_TTY):

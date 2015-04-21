@@ -8,20 +8,20 @@ import logging
 logger = logging.getLogger('photobooth.cameras')
 
 # Currently unused
-#CAPTURE_SHUTTER_SPEED = '1/200'
-#DEFAULT_PREVIEW_SHUTTER_SPEED = '1'
+# CAPTURE_SHUTTER_SPEED = '1/200'
+# DEFAULT_PREVIEW_SHUTTER_SPEED = '1'
 
-#CAPTURE_APERTURE = '8'
-#DEFAULT_PREVIEW_APERTURE = '1.8'
+# CAPTURE_APERTURE = '8'
+# DEFAULT_PREVIEW_APERTURE = '1.8'
+
 
 class Camera(object):
     def __init__(self):
         self.camera = piggyphoto.camera()
         self.reset_settings()
 
-        #self.camera.config.main.actions.autofocusdrive=True
-        #self.camera.config.main.actions.manualfocusdrive=2
-        #qq self.camera.leave_locked()
+        # self.camera.config.main.actions.autofocusdrive=True
+        # self.camera.config.main.actions.manualfocusdrive=2
 
     def try_set_capturesettings(self, setting):
         for x in range(0, 10):
@@ -44,13 +44,13 @@ class Camera(object):
 
     def reset_settings(self):
         self.try_set_capturesettings('AV')
-        #self.camera.config.main.capturesettings.shutterspeed.value = DEFAULT_PREVIEW_SHUTTER_SPEED
-        #self.camera.config.main.capturesettings.aperture.value = DEFAULT_PREVIEW_APERTURE
+        # self.camera.config.main.capturesettings.shutterspeed.value = DEFAULT_PREVIEW_SHUTTER_SPEED
+        # self.camera.config.main.capturesettings.aperture.value = DEFAULT_PREVIEW_APERTURE
 
     def set_settings_for_capture(self):
         self.try_set_capturesettings('Manual')
-        #self.camera.config.main.capturesettings.shutterspeed.value = CAPTURE_SHUTTER_SPEED
-        #self.camera.config.main.capturesettings.aperture.value = CAPTURE_APERTURE
+        # self.camera.config.main.capturesettings.shutterspeed.value = CAPTURE_SHUTTER_SPEED
+        # self.camera.config.main.capturesettings.aperture.value = CAPTURE_APERTURE
 
     def capture_preview(self):
         if not self.camera:
@@ -95,7 +95,7 @@ class WebcamCamera():
     def __init__(self):
         import pygame.camera
         pygame.camera.init()
-        self.camera = pygame.camera.Camera("/dev/video0",(640,480))
+        self.camera = pygame.camera.Camera("/dev/video0", (640, 480))
         self.camera.start()
 
     def capture_preview(self):
@@ -107,6 +107,7 @@ class WebcamCamera():
 
     def sleep(self):
         logger.info("Sleep!")
+
 
 class DebugCamera():
     def capture_preview(self):
