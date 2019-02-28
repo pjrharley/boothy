@@ -21,7 +21,7 @@ class UploadThread(threading.Thread):
     def run(self):
         logger.info("Uploading to website: %s", self.file_path)
         with open(self.file_path, 'rb') as f:
-            files = {'Filedata': f}
+            files = {'file': f}
             headers = {'X-API-TOKEN': PHOTO_API_KEY}
             try:
                 r = requests.post(self.url, files=files, headers=headers)

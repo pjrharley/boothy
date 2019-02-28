@@ -15,9 +15,21 @@ logger = logging.getLogger('photobooth.cameras')
 # DEFAULT_PREVIEW_APERTURE = '1.8'
 
 
+# other settings I might like to try:
+# /main/imgsettings/whitebalance (6 is flash, 5 florescent)
+# /main/imgsettings/iso Choice: 0 Auto
+#Choice: 1 100
+#Choice: 2 200
+#Choice: 3 400
+#Choice: 4 800
+#Choice: 5 1600
+# /main/settings/autopoweroff - 0 is off
+
+
+
 class Camera(object):
     def __init__(self):
-        self.camera = piggyphoto.camera()
+        self.camera = piggyphoto.Camera()
         self.reset_settings()
 
         # self.camera.config.main.actions.autofocusdrive=True
@@ -40,7 +52,7 @@ class Camera(object):
                     time.sleep(x/2)
                 if x > 4 and x % 2 == 1:
                     del self.camera
-                    self.camera = piggyphoto.camera()
+                    self.camera = piggyphoto.Camera()
 
     def reset_settings(self):
         self.try_set_capturesettings('AV')
@@ -54,9 +66,12 @@ class Camera(object):
 
     def capture_preview(self):
         if not self.camera:
-            self.camera = piggyphoto.camera()
+            self.camera = piggyphoto.Camera()
             logger.debug("Created new camera")
-        return pygame.image.load(StringIO.StringIO(self.camera.capture_preview().get_data()))
+        img_file = self.camera.capture_preview()
+        image = img_file.get_data()
+        img_file.clean()
+        return pygame.image.load(StringIO.StringIO(image))
 
     def capture_image(self, image_path):
         # Kludge - keep trying to capture the image
@@ -64,10 +79,10 @@ class Camera(object):
         for x in range(0, 5):
             try:
                 if hasattr(self, 'camera'):
-                    # Delete the camera object. This causes the mirror to close, otherwise
+                    # This causes the mirror to close, otherwise
                     # we don't get autofocus!
-                    del self.camera
-                self.camera = piggyphoto.camera()
+                    self.camera.close()
+                self.camera = piggyphoto.Camera()
 
                 self.set_settings_for_capture()
                 self.camera.capture_image(image_path)

@@ -15,8 +15,8 @@ class Button(object):
 
         if os.path.exists(self.tty):
             import serial
-            self.port = serial.Serial(self.tty, 0)
-            self.port.setDTR(level=True)
+            self.port = serial.Serial(self.tty, 9600)
+            self.port.setDTR() #level=True)
 
     def is_pressed(self):
         if self.port:

@@ -11,6 +11,7 @@ import logging
 
 from cameras import DebugCamera, WebcamCamera, Camera
 from button import Button
+from printer import CmdPrinter, PyPrinter, FilePrinter
 
 logger = logging.getLogger('photobooth')
 
@@ -31,22 +32,16 @@ except ImportError:
     upload_image_async = None
 
 PADDING_PERCENT = 1.5
-PRINT_IMAGE_SIZE = None  # "3498x2478"
+PRINT_IMAGE_SIZE = "2136x1424"
 
 
 class PhotoBooth(object):
-    def __init__(self, image_dest, fullscreen, debug, webcam, print_count, printer, upload_to):
+    def __init__(self, image_dest, fullscreen, debug, camera, printer, upload_to):
         self.debug = debug
-        if debug:
-            self.camera = DebugCamera()
-        elif webcam:
-            self.camera = WebcamCamera()
-        else:
-            self.camera = Camera()
-
+        self.camera = camera
         if self.debug:
             self.count_down_time = 2
-            self.image_display_time = 3
+            self.image_display_time = 2
             self.montage_display_time = 8
             self.idle_time = 30
 
@@ -56,7 +51,6 @@ class PhotoBooth(object):
             self.montage_display_time = 15
             self.idle_time = 240
 
-        self.print_count = print_count
         self.printer = printer
         self.upload_to = upload_to
         self.output_dir = image_dest
@@ -162,8 +156,6 @@ class PhotoBooth(object):
         file_path = os.path.join(self.output_dir, file_name)
         logger.info("Capturing image to: %s", file_path)
         self.camera.capture_image(file_path)
-        if self.upload_to:
-            upload_image_async(self.upload_to, file_path)
 
     def display_camera_arrow(self, clear_screen=False):
         if clear_screen:
@@ -207,7 +199,10 @@ class PhotoBooth(object):
         if not self.debug:
             pygame.image.save(combined, out_path)
 
-        if self.print_count:
+        if self.upload_to:
+            upload_image_async(self.upload_to, out_path)
+
+        if self.printer:
             if PRINT_IMAGE_SIZE:
                 print_dir = os.path.join(self.output_dir, 'to_print')
                 print_path = os.path.join(print_dir, out_name)
@@ -222,17 +217,7 @@ class PhotoBooth(object):
                     call(convert_cmd)
             else:
                 print_path = out_path
-            self.print_image(print_path)
-
-    def print_image(self, image_path):
-        printing_cmd = ["lpr"]
-        if self.printer:
-            printing_cmd += ["-P", self.printer]
-        printing_cmd += ["-#", str(self.print_count), image_path]
-
-        logger.info(' '.join(printing_cmd))
-        if not self.debug:
-            call(printing_cmd)
+            self.printer.print_image(print_path)
 
     def add_button_listener(self):
         self.button = Button()
@@ -365,8 +350,12 @@ class ShowSessionMontageState(TimedState):
                 self.session.get_image_name('combined'),
                 [self.session.get_image_name(im) for im in range(1, 5)])
             self.saved = True
-            if self.session.booth.print_count:
-                self.session.booth.render_text_bottom("Printing...", size=100)
+            if self.session.booth.printer:
+                if self.session.booth.printer.get_error():
+                    print_text = "Check printer!"
+                else:
+                    print_text = "Printing..."
+                self.session.booth.render_text_bottom(print_text, size=100)
 
     def next(self, button_pressed):
         if self.time_up():
@@ -419,12 +408,26 @@ if __name__ == '__main__':
         logger.error("Failed to find requests library.")
         sys.exit(-1)
 
+    if args.debug:
+        camera = DebugCamera()
+    elif args.webcam:
+        camera = WebcamCamera()
+    else:
+        camera = Camera()
+
+    if args.print_count:
+        if args.printer == 'File':
+            printer = FilePrinter()
+        else:
+            printer = PyPrinter(args.printer, args.print_count, args.debug)
+    else:
+        printer = None
+
     booth = PhotoBooth(args.save_to,
                        fullscreen=(not args.nofullscreen),
                        debug=args.debug,
-                       webcam=args.webcam,
-                       print_count=args.print_count,
-                       printer=args.printer,
+                       camera=camera,
+                       printer=printer,
                        upload_to=args.upload_to)
     try:
         booth.start()
